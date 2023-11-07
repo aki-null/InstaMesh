@@ -15,6 +15,15 @@ namespace InstaMesh.Editor
             _instaMesh = (InstaMeshAsset)target;
         }
 
+        private void OnDisable()
+        {
+            if (_editor != null)
+            {
+                DestroyImmediate(_editor);
+                _editor = null;
+            }
+        }
+
         private bool _showMeshInfo;
 
         public override void OnInspectorGUI()
