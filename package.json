@@ -1,0 +1,21 @@
+{
+  "name": "com.aki-null.instamesh",
+  "displayName": "InstaMesh",
+  "description": "Procedural mesh generator for VFX",
+  "version": "0.0.1",
+  "unity": "2022.3",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aki-null/InstaMesh.git"
+  },
+  "author": "Akihiro Noguchi <aki@aki-null.net> (https://github.com/aki-null)",
+  "dependencies": {
+    "com.unity.mathematics": "1.2.1"
+  },
+  "keywords": [
+    "mesh",
+    "vfx",
+    "particle"
+  ]
+}
