@@ -18,8 +18,7 @@ namespace InstaMesh.Editor
         public float innerRadius;
         public float outerRadius = 1;
         public float extrusion;
-        public float springExtrusion;
-        [Range(0, 32)] public float angle = 1;
+        [Range(0, 1)] public float angle = 1;
         public int segments = 32;
         public int vSegments = 32;
         public Axis axis = Axis.Z;
@@ -35,20 +34,20 @@ namespace InstaMesh.Editor
             if (!flip)
             {
                 buff[offset + 0] = a;
-                buff[offset + 1] = b;
-                buff[offset + 2] = c;
-                buff[offset + 3] = c;
-                buff[offset + 4] = b;
-                buff[offset + 5] = d;
-            }
-            else
-            {
-                buff[offset + 0] = a;
                 buff[offset + 1] = c;
                 buff[offset + 2] = b;
                 buff[offset + 3] = c;
                 buff[offset + 4] = d;
                 buff[offset + 5] = b;
+            }
+            else
+            {
+                buff[offset + 0] = a;
+                buff[offset + 1] = b;
+                buff[offset + 2] = c;
+                buff[offset + 3] = c;
+                buff[offset + 4] = b;
+                buff[offset + 5] = d;
             }
         }
 
@@ -67,16 +66,29 @@ namespace InstaMesh.Editor
             zAxis[(axisIndex + 0) % 3] = 1;
 
             var vtx = new NativeArray<float3>();
+            var normals = new NativeArray<float3>();
             var zProjectedUv = new NativeArray<float2>();
             var radialUv = new NativeArray<float2>();
             var idx = new NativeArray<int>();
 
+            var flipTriangles = flipped;
+            if (extrusion < 0.0f)
+            {
+                flipTriangles = !flipTriangles;
+            }
+
             try
             {
+                float OuterRate(int segment)
+                {
+                    return (outerRadius - innerRadius) * (segment / (float)vSegments) + innerRadius;
+                }
+
                 var len = (segments + 1) * (vSegments + 1);
                 var n = len;
                 if (doubleSided) len *= 2;
                 vtx = new NativeArray<float3>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                normals = new NativeArray<float3>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
                 zProjectedUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
                 radialUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
 
@@ -89,18 +101,52 @@ namespace InstaMesh.Editor
                 {
                     var phi = 2 * math.PI * angle * ((float)i / segments);
                     var (x, y) = (math.cos(phi), math.sin(phi));
+                    // The direction from the center to outer circle
+                    var radialVDir = x * xAxis + y * yAxis;
+
+                    var vertOffset = i * (vSegments + 1);
 
                     for (var j = 0; j < vSegments + 1; j++)
                     {
-                        var vertIdx = i * (vSegments + 1) + j;
-
-                        var outerRate = (outerRadius - innerRadius) * (j / (float)vSegments) + innerRadius;
+                        var vertIdx = vertOffset + j;
+                        var outerRate = OuterRate(j);
                         var extrusionRate = extrusion * (1.0f - j / (float)vSegments);
-                        var springExtrusionRate = springExtrusion * (i / (float)segments);
-                        vtx[vertIdx] = (x * xAxis + y * yAxis) * outerRate +
-                                       zAxis * (extrusionRate + springExtrusionRate);
+                        vtx[vertIdx] = radialVDir * outerRate + zAxis * extrusionRate;
                         zProjectedUv[vertIdx] = math.float2(y, x) * outerRate / 2 + 0.5f;
                         radialUv[vertIdx] = math.float2((float)i / segments, j / (float)vSegments);
+                    }
+
+                    // Compute normal
+                    var binormal = math.normalizesafe(vtx[vertOffset + 1] - vtx[vertOffset]);
+
+                    for (var j = 0; j < vSegments + 1; j++)
+                    {
+                        var vertIdx = vertOffset + j;
+                        var outerRate = OuterRate(j);
+                        // Tangent is 90 degrees rotation of radialVDir
+                        var tangent = y * xAxis + -x * yAxis;
+                        var normal = math.normalize(math.cross(tangent, binormal));
+
+                        if (flipTriangles)
+                        {
+                            normal *= -1;
+                        }
+
+                        // The mesh flips when outer rate becomes negative, so flip the normal.
+                        // The resulting mesh looks like a X shape in cross-section when this happens.
+                        // Note that normal near the crossing point may be wrong depending on the config, but this can
+                        // not be avoided due to how mesh and normal interpolation works.
+                        if (outerRate < 0.0f)
+                        {
+                            normal *= -1;
+                        }
+
+                        normals[vertIdx] = normal;
+
+                        if (doubleSided)
+                        {
+                            normals[vertIdx + n] = -normal;
+                        }
                     }
                 }
 
@@ -121,7 +167,7 @@ namespace InstaMesh.Editor
                         var b = a + 1;
                         var c = a + vSegments + 1;
                         var d = c + 1;
-                        PopulateQuad(idx, triIdx, a, b, c, d, !flipped);
+                        PopulateQuad(idx, triIdx, a, b, c, d, !flipTriangles);
 
                         if (!doubleSided) continue;
                         triIdx += triN;
@@ -129,7 +175,7 @@ namespace InstaMesh.Editor
                         b += n;
                         c += n;
                         d += n;
-                        PopulateQuad(idx, triIdx, a, b, c, d, flipped);
+                        PopulateQuad(idx, triIdx, a, b, c, d, flipTriangles);
                     }
                 }
 
@@ -144,14 +190,15 @@ namespace InstaMesh.Editor
                 });
 
 
-                mesh.Clear();
+                mesh.Clear(false);
                 mesh.indexFormat = vtx.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
                 mesh.SetVertices(vtx);
+                mesh.SetNormals(normals);
                 mesh.SetUVs(0, selectUv(uv0));
                 mesh.SetUVs(1, selectUv(uv1));
                 mesh.SetUVs(2, selectUv(uv2));
                 mesh.SetIndices(idx, MeshTopology.Triangles, 0);
-                mesh.RecalculateNormals(); // TODO: This needs to be generated manually for edges to be correct
+
                 mesh.Optimize();
             }
             finally
