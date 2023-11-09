@@ -200,6 +200,7 @@ namespace InstaMesh.Editor
             finally
             {
                 vtx.Dispose();
+                normals.Dispose();
                 zProjectedUv.Dispose();
                 radialUv.Dispose();
                 idx.Dispose();
