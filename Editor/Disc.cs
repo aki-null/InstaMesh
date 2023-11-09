@@ -72,10 +72,6 @@ namespace InstaMesh.Editor
             var idx = new NativeArray<int>();
 
             var flipTriangles = flipped;
-            if (extrusion < 0.0f)
-            {
-                flipTriangles = !flipTriangles;
-            }
 
             try
             {
