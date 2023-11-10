@@ -24,6 +24,7 @@ namespace InstaMesh.Editor
         public Axis axis = Axis.Z;
         public bool flipped;
         public bool doubleSided;
+        public Gradient vertexColor;
 
         public UVType uv0;
         public UVType uv1;
@@ -70,6 +71,7 @@ namespace InstaMesh.Editor
             var zProjectedUv = new NativeArray<float2>();
             var radialUv = new NativeArray<float2>();
             var idx = new NativeArray<int>();
+            var vtxColor = new NativeArray<Color32>();
 
             var flipTriangles = flipped;
 
@@ -87,6 +89,7 @@ namespace InstaMesh.Editor
                 normals = new NativeArray<float3>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
                 zProjectedUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
                 radialUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                vtxColor = new NativeArray<Color32>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
 
                 var triLen = segments * vSegments * 6;
                 var triN = triLen;
@@ -110,6 +113,7 @@ namespace InstaMesh.Editor
                         vtx[vertIdx] = radialVDir * outerRate + zAxis * extrusionRate;
                         zProjectedUv[vertIdx] = math.float2(y, x) * outerRate / 2 + 0.5f;
                         radialUv[vertIdx] = math.float2((float)i / segments, j / (float)vSegments);
+                        vtxColor[vertIdx] = vertexColor.Evaluate(radialUv[vertIdx].x);
                     }
 
                     // Compute normal
@@ -151,6 +155,7 @@ namespace InstaMesh.Editor
                     NativeArray<float3>.Copy(vtx, 0, vtx, n, n);
                     NativeArray<float2>.Copy(zProjectedUv, 0, zProjectedUv, n, n);
                     NativeArray<float2>.Copy(radialUv, 0, radialUv, n, n);
+                    NativeArray<Color32>.Copy(vtxColor, 0, vtxColor, n, n);
                 }
 
                 for (var i = 0; i < segments; i++)
@@ -194,6 +199,7 @@ namespace InstaMesh.Editor
                 mesh.SetUVs(1, selectUv(uv1));
                 mesh.SetUVs(2, selectUv(uv2));
                 mesh.SetIndices(idx, MeshTopology.Triangles, 0);
+                mesh.SetColors(vtxColor);
 
                 mesh.Optimize();
             }
@@ -204,6 +210,7 @@ namespace InstaMesh.Editor
                 zProjectedUv.Dispose();
                 radialUv.Dispose();
                 idx.Dispose();
+                vtxColor.Dispose();
             }
         }
     }
