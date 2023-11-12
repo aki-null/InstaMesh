@@ -5,7 +5,7 @@ namespace InstaMesh.Editor
 {
     public static class GradientNativeHelper
     {
-        public const int Size = 256;
+        public const int Size = 512;
         public const float StepSize = 1.0f / (Size - 1);
 
         public static void GenerateLut(Gradient grad, ColorSpace colorSpace, out NativeArray<Color32> table)
