@@ -22,7 +22,6 @@ namespace InstaMesh.Editor
         public UVType vertexColorUVType;
         public UVAxis vertexColorMapType;
         public Gradient vertexColor;
-        public ColorSpace vertexColorSpace;
 
         [Range(1, 8)] public int uvCount = 1;
         public UVType uv0;
