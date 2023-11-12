@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,54 +7,77 @@ namespace InstaMesh.Editor
     [CustomEditor(typeof(InstaMeshAsset))]
     public class InstaMeshAssetEditor : UnityEditor.Editor
     {
-        private InstaMeshAsset _instaMesh;
+        private InstaMeshAsset _asset;
 
         private UnityEditor.Editor _editor;
 
         public void OnEnable()
         {
-            _instaMesh = (InstaMeshAsset)target;
-        }
-
-        private void OnDisable()
-        {
-            if (_editor != null)
-            {
-                DestroyImmediate(_editor);
-                _editor = null;
-            }
+            _asset = (InstaMeshAsset)target;
         }
 
         private bool _showMeshInfo;
 
+        private static void DrawDisc(SerializedProperty disc, SerializedProperty vertexColorSpace)
+        {
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.innerRadius)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.outerRadius)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.extrusion)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.angle)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.uSegments)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.vSegments)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.axis)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.flipped)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.doubleSided)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.vertexColorUVType)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.vertexColorMapType)));
+            EditorGUILayout.PropertyField(disc.FindPropertyRelative(nameof(Disc.vertexColor)));
+            EditorGUILayout.PropertyField(vertexColorSpace);
+
+            var uvCountProp = disc.FindPropertyRelative(nameof(Disc.uvCount));
+            EditorGUILayout.PropertyField(uvCountProp);
+            var uvCount = uvCountProp.intValue;
+
+            var currentUVProp = disc.FindPropertyRelative(nameof(Disc.uv0));
+            for (var i = 0; i < 8 && i < uvCount; ++i)
+            {
+                EditorGUILayout.PropertyField(currentUVProp);
+                currentUVProp.Next(false);
+            }
+        }
+
         public override void OnInspectorGUI()
         {
-            var genType = serializedObject.FindProperty("genType");
-            var disc = serializedObject.FindProperty("disc");
+            var genType = serializedObject.FindProperty(nameof(InstaMeshAsset.genType));
+            var disc = serializedObject.FindProperty(nameof(InstaMeshAsset.disc));
+            var vertexColorSpace = serializedObject.FindProperty(nameof(InstaMeshAsset.vertexColorSpace));
 
             EditorGUILayout.PropertyField(genType);
 
-            switch (_instaMesh.genType)
+            SerializedProperty genProp;
+            switch (_asset.genType)
             {
                 case GeneratorType.Disc:
-                    EditorGUILayout.PropertyField(disc);
+                    DrawDisc(disc, vertexColorSpace);
                     break;
+                default:
+                    return;
             }
 
-            _showMeshInfo = EditorGUILayout.Foldout(_showMeshInfo, "Mesh Detail");
-            if (_showMeshInfo)
+            var editor = Editor;
+            if (editor != null)
             {
-                var editor = Editor;
-                if (editor != null)
-                {
-                    editor.OnInspectorGUI();
-                }
+                EditorGUILayout.Space();
+                EditorGUILayout.BeginVertical(GUI.skin.box);
+                EditorGUILayout.LabelField("Mesh Info");
+                editor.OnInspectorGUI();
+                EditorGUILayout.EndVertical();
             }
 
             if (serializedObject.ApplyModifiedProperties())
             {
-                EditorUtility.SetDirty(_instaMesh);
-                _instaMesh.Generate(_instaMesh.Mesh);
+                EditorUtility.SetDirty(_asset);
+                _asset.Generate(_asset.Mesh);
             }
         }
 
@@ -66,8 +90,8 @@ namespace InstaMesh.Editor
         {
             get
             {
-                if (_instaMesh == null) return null;
-                var mesh = _instaMesh.Mesh;
+                if (_asset == null) return null;
+                var mesh = _asset.Mesh;
                 if (mesh == null) return null;
                 CreateCachedEditor(mesh, null, ref _editor);
                 return _editor;

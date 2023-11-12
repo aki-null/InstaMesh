@@ -26,6 +26,9 @@ namespace InstaMesh.Editor
                 };
                 // Treat it as a sub-asset
                 AssetDatabase.AddObjectToAsset(mesh, instaMesh);
+                // Configure default
+                instaMesh.vertexColorSpace = InstaMeshSettings.GetOrCreateSettings().defaultColorSpace;
+                instaMesh.disc.vertexColor = new Gradient();
                 // Make something up using the default config
                 instaMesh.Generate(mesh);
                 EditorUtility.SetDirty(mesh);

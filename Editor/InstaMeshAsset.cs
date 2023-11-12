@@ -9,6 +9,7 @@ namespace InstaMesh.Editor
     {
         public GeneratorType genType;
         public Disc disc = new();
+        public ColorSpace vertexColorSpace;
 
         public Mesh Mesh
         {
@@ -40,7 +41,7 @@ namespace InstaMesh.Editor
             switch (genType)
             {
                 case GeneratorType.Disc:
-                    disc.Generate(mesh);
+                    disc.Generate(mesh, vertexColorSpace);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
