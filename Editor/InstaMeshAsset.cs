@@ -55,8 +55,10 @@ namespace InstaMesh.Editor
 
         private void OnValidate()
         {
-            if (!NeedsRegeneration) return;
-            Generate(Mesh);
+            if (NeedsRegeneration || Undo.isProcessing)
+            {
+                Generate(Mesh);
+            }
         }
     }
 }
