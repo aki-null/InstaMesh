@@ -107,25 +107,27 @@ namespace InstaMesh.Editor
 
             try
             {
-                var len = (uSegments + 1) * (vSegments + 1);
-                var n = len;
-                if (doubleSided) len *= 2;
-                vtx = new NativeArray<float3>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                normals = new NativeArray<float3>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                zProjectedUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                radialUv = new NativeArray<float2>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                vtxColor = new NativeArray<Color32>(len, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                var vertCount = (uSegments + 1) * (vSegments + 1);
+                var sideVertCount = vertCount;
+                if (doubleSided) vertCount *= 2;
+                
+                vtx = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                normals = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                zProjectedUv = new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                radialUv = new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                vtxColor = new NativeArray<Color32>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
                 
                 GradientNativeHelper.GenerateLut(vertexColor, colorSpace, out gradTable);
 
-                var triLen = uSegments * vSegments * 6;
-                var triN = triLen;
-                if (doubleSided) triLen *= 2;
-                idx = new NativeArray<int>(triLen, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                var triCount = uSegments * vSegments * 6;
+                var sideTriCount = triCount;
+                if (doubleSided) triCount *= 2;
+                idx = new NativeArray<int>(triCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
 
-                BurstGenerator.GenerateDiscBuffer(xAxis, yAxis, zAxis, n, triN, ref vtx, ref idx, ref zProjectedUv,
-                    ref radialUv, ref vtxColor, ref normals, ref gradTable, uSegments, vSegments, angle, innerRadius,
-                    outerRadius, flipTriangles, doubleSided, extrusion, vertexColorUVType, vertexColorMapType);
+                BurstGenerator.GenerateDiscBuffer(xAxis, yAxis, zAxis, sideVertCount, sideTriCount, ref vtx, ref idx,
+                    ref zProjectedUv, ref radialUv, ref vtxColor, ref normals, ref gradTable, uSegments, vSegments,
+                    angle, innerRadius, outerRadius, flipTriangles, doubleSided, extrusion, vertexColorUVType,
+                    vertexColorMapType);
 
                 var selectUv = new Func<UVType, NativeArray<float2>>(t =>
                 {

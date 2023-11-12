@@ -74,12 +74,13 @@ namespace InstaMesh.Editor
         }
 
         [BurstCompile]
-        public static void GenerateDiscBuffer(in float3 xAxis, in float3 yAxis, in float3 zAxis, int n, int triN,
-            ref NativeArray<float3> vtx, ref NativeArray<int> idx, ref NativeArray<float2> zProjectedUv,
-            ref NativeArray<float2> radialUv, ref NativeArray<Color32> vtxColor, ref NativeArray<float3> normals,
-            ref NativeArray<Color32> gradTable, int segmentsU, int segmentsV, float angle, float innerRadius,
-            float outerRadius, bool flipTriangles, bool doubleSided, float extrusion, UVType vertexColorUVType,
-            UVAxis vertexColorMapType)
+        public static void GenerateDiscBuffer(in float3 xAxis, in float3 yAxis, in float3 zAxis, int sideVertCount,
+            int sideTriCount, ref NativeArray<float3> vtx, ref NativeArray<int> idx,
+            ref NativeArray<float2> zProjectedUv, ref NativeArray<float2> radialUv, ref NativeArray<Color32> vtxColor,
+            ref NativeArray<float3> normals, ref NativeArray<Color32> gradTable, int segmentsU, int segmentsV,
+            float angle, float innerRadius, float outerRadius, bool flipTriangles, bool doubleSided, float extrusion,
+            UVType vertexColorUVType, UVAxis vertexColorMapType)
+
         {
             for (var i = 0; i < segmentsU + 1; i++)
             {
@@ -139,17 +140,17 @@ namespace InstaMesh.Editor
 
                     if (doubleSided)
                     {
-                        normals[vertIdx + n] = -normal;
+                        normals[vertIdx + sideVertCount] = -normal;
                     }
                 }
             }
 
             if (doubleSided)
             {
-                NativeArray<float3>.Copy(vtx, 0, vtx, n, n);
-                NativeArray<float2>.Copy(zProjectedUv, 0, zProjectedUv, n, n);
-                NativeArray<float2>.Copy(radialUv, 0, radialUv, n, n);
-                NativeArray<Color32>.Copy(vtxColor, 0, vtxColor, n, n);
+                NativeArray<float3>.Copy(vtx, 0, vtx, sideVertCount, sideVertCount);
+                NativeArray<float2>.Copy(zProjectedUv, 0, zProjectedUv, sideVertCount, sideVertCount);
+                NativeArray<float2>.Copy(radialUv, 0, radialUv, sideVertCount, sideVertCount);
+                NativeArray<Color32>.Copy(vtxColor, 0, vtxColor, sideVertCount, sideVertCount);
             }
 
             for (var i = 0; i < segmentsU; i++)
@@ -165,11 +166,11 @@ namespace InstaMesh.Editor
                     PopulateQuad(ref idx, triIdx, a, b, c, d, !flipTriangles);
 
                     if (!doubleSided) continue;
-                    triIdx += triN;
-                    a += n;
-                    b += n;
-                    c += n;
-                    d += n;
+                    triIdx += sideTriCount;
+                    a += sideVertCount;
+                    b += sideVertCount;
+                    c += sideVertCount;
+                    d += sideVertCount;
                     PopulateQuad(ref idx, triIdx, a, b, c, d, flipTriangles);
                 }
             }
