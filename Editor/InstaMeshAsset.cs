@@ -11,6 +11,9 @@ namespace InstaMesh.Editor
         public Disc disc = new();
         public ColorSpace vertexColorSpace;
 
+        // This flag is used by InstaMeshAssetEditor to activate OnValidate mesh regeneration mode
+        [NonSerialized] public bool NeedsRegeneration;
+
         public Mesh Mesh
         {
             get
@@ -48,6 +51,12 @@ namespace InstaMesh.Editor
             }
 
             EditorUtility.SetDirty(mesh);
+        }
+
+        private void OnValidate()
+        {
+            if (!NeedsRegeneration) return;
+            Generate(Mesh);
         }
     }
 }

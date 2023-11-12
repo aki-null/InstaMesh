@@ -48,6 +48,8 @@ namespace InstaMesh.Editor
 
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
+
             var genType = serializedObject.FindProperty(nameof(InstaMeshAsset.genType));
             var disc = serializedObject.FindProperty(nameof(InstaMeshAsset.disc));
             var vertexColorSpace = serializedObject.FindProperty(nameof(InstaMeshAsset.vertexColorSpace));
@@ -74,10 +76,22 @@ namespace InstaMesh.Editor
                 EditorGUILayout.EndVertical();
             }
 
-            if (serializedObject.ApplyModifiedProperties())
+            // The mesh regeneration is done in the asset's OnValidate to make undo work correctly.
+            // However, this means the regeneration happens when the editor enters the play mode, which is not
+            // desirable.
+            // The NeedsRegeneration boolean is used as a "I want you to regenerate while I apply properties" flag.
+            _asset.NeedsRegeneration = true;
+
+            try
             {
-                EditorUtility.SetDirty(_asset);
-                _asset.Generate(_asset.Mesh);
+                if (serializedObject.ApplyModifiedProperties())
+                {
+                    EditorUtility.SetDirty(_asset);
+                }
+            }
+            finally
+            {
+                _asset.NeedsRegeneration = false;
             }
         }
 
