@@ -1,5 +1,4 @@
 using System;
-using Unity.Collections;
 using UnityEngine.Rendering;
 using UnityEngine;
 using Unity.Mathematics;
@@ -78,9 +77,6 @@ namespace InstaMesh.Editor
             };
         }
 
-        private const int GradTableSize = 256;
-        private const float GradTableStepSize = 1.0f / (GradTableSize - 1);
-
         public void Generate(Mesh mesh, ColorSpace colorSpace)
         {
             if (uSegments < 3) return;
@@ -94,73 +90,52 @@ namespace InstaMesh.Editor
             yAxis[(int)GetRotatedAxis(Axis.Y)] = 1;
             zAxis[(int)GetRotatedAxis(Axis.Z)] = 1;
 
-            var vtx = new NativeArray<float3>();
-            var normals = new NativeArray<float3>();
-            var zProjectedUv = new NativeArray<float2>();
-            var radialUv = new NativeArray<float2>();
-            var idx = new NativeArray<int>();
-            var vtxColor = new NativeArray<Color32>();
-            var gradTable = new NativeArray<Color32>();
+            var vertCount = (uSegments + 1) * (vSegments + 1);
+            var triCount = uSegments * vSegments * 6;
 
-            var flipTriangles = flipped;
+            var genConfig = new BurstGenerator.GridGenerationConfig
+            {
+                XAxis = xAxis,
+                YAxis = yAxis,
+                ZAxis = zAxis,
+                SideVertCount = vertCount,
+                SideTriCount = triCount,
+                SegmentsU = uSegments,
+                SegmentsV = vSegments,
+                Angle = angle,
+                InnerRadius = innerRadius,
+                OuterRadius = outerRadius,
+                FlipTriangles = flipped,
+                DoubleSided = doubleSided,
+                Extrusion = extrusion,
+                VertexColorUVType = vertexColorUVType,
+                VertexColorMapType = vertexColorMapType
+            };
 
             try
             {
-                var vertCount = (uSegments + 1) * (vSegments + 1);
-                var sideVertCount = vertCount;
-                if (doubleSided) vertCount *= 2;
-                
-                vtx = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                normals = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                zProjectedUv = new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                radialUv = new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                vtxColor = new NativeArray<Color32>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-                
-                GradientNativeHelper.GenerateLut(vertexColor, colorSpace, out gradTable);
+                genConfig.PrepareBuffer();
 
-                var triCount = uSegments * vSegments * 6;
-                var sideTriCount = triCount;
-                if (doubleSided) triCount *= 2;
-                idx = new NativeArray<int>(triCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-
-                BurstGenerator.GenerateDiscBuffer(xAxis, yAxis, zAxis, sideVertCount, sideTriCount, ref vtx, ref idx,
-                    ref zProjectedUv, ref radialUv, ref vtxColor, ref normals, ref gradTable, uSegments, vSegments,
-                    angle, innerRadius, outerRadius, flipTriangles, doubleSided, extrusion, vertexColorUVType,
-                    vertexColorMapType);
-
-                var selectUv = new Func<UVType, NativeArray<float2>>(t =>
-                {
-                    return t switch
-                    {
-                        UVType.TopProjected => zProjectedUv,
-                        UVType.Radial => radialUv,
-                        _ => new NativeArray<float2>()
-                    };
-                });
+                GradientNativeHelper.GenerateLut(vertexColor, colorSpace, out genConfig.GradTable);
+                BurstGenerator.GenerateGrid(ref genConfig);
 
                 mesh.Clear(false);
-                mesh.indexFormat = vtx.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-                mesh.SetVertices(vtx);
-                mesh.SetNormals(normals);
+                mesh.indexFormat = genConfig.Vtx.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+                mesh.SetVertices(genConfig.Vtx);
+                mesh.SetNormals(genConfig.Normals);
                 for (var i = 0; i < uvCount; ++i)
                 {
-                    mesh.SetUVs(i, selectUv(GetUVTypeAt(i)));
+                    mesh.SetUVs(i, genConfig.SelectUV(GetUVTypeAt(i)));
                 }
 
-                mesh.SetIndices(idx, MeshTopology.Triangles, 0);
-                mesh.SetColors(vtxColor);
+                mesh.SetIndices(genConfig.Idx, MeshTopology.Triangles, 0);
+                mesh.SetColors(genConfig.VtxColor);
 
                 mesh.Optimize();
             }
             finally
             {
-                vtx.Dispose();
-                normals.Dispose();
-                zProjectedUv.Dispose();
-                radialUv.Dispose();
-                idx.Dispose();
-                vtxColor.Dispose();
-                gradTable.Dispose();
+                genConfig.Dispose();
             }
         }
     }

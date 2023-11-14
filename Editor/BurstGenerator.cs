@@ -74,55 +74,111 @@ namespace InstaMesh.Editor
         }
 
         [BurstCompile]
-        public static void GenerateDiscBuffer(in float3 xAxis, in float3 yAxis, in float3 zAxis, int sideVertCount,
-            int sideTriCount, ref NativeArray<float3> vtx, ref NativeArray<int> idx,
-            ref NativeArray<float2> zProjectedUv, ref NativeArray<float2> radialUv, ref NativeArray<Color32> vtxColor,
-            ref NativeArray<float3> normals, ref NativeArray<Color32> gradTable, int segmentsU, int segmentsV,
-            float angle, float innerRadius, float outerRadius, bool flipTriangles, bool doubleSided, float extrusion,
-            UVType vertexColorUVType, UVAxis vertexColorMapType)
-
+        public struct GridGenerationConfig : IDisposable
         {
-            for (var i = 0; i < segmentsU + 1; i++)
+            public float3 XAxis;
+            public float3 YAxis;
+            public float3 ZAxis;
+            public int SideVertCount;
+            public int SideTriCount;
+            public NativeArray<float3> Vtx;
+            public NativeArray<int> Idx;
+            public NativeArray<float2> ZProjectedUv;
+            public NativeArray<float2> RadialUv;
+            public NativeArray<Color32> VtxColor;
+            public NativeArray<float3> Normals;
+            public NativeArray<Color32> GradTable;
+            public int SegmentsU;
+            public int SegmentsV;
+            public float Angle;
+            public float InnerRadius;
+            public float OuterRadius;
+            public BurstBool FlipTriangles;
+            public BurstBool DoubleSided;
+            public float Extrusion;
+            public UVType VertexColorUVType;
+            public UVAxis VertexColorMapType;
+
+            public void PrepareBuffer()
             {
-                var phi = 2 * math.PI * angle * ((float)i / segmentsU);
+                var vertCount = DoubleSided ? SideVertCount * 2 : SideVertCount;
+                Vtx = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                Normals = new NativeArray<float3>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                ZProjectedUv =
+                    new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                RadialUv = new NativeArray<float2>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+                VtxColor = new NativeArray<Color32>(vertCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+
+                var triCount = DoubleSided ? SideTriCount * 2 : SideTriCount;
+                Idx = new NativeArray<int>(triCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            }
+
+            public NativeArray<float2> SelectUV(UVType t)
+            {
+                return t switch
+                {
+                    UVType.TopProjected => ZProjectedUv,
+                    UVType.Radial => RadialUv,
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+            }
+
+            public void Dispose()
+            {
+                Vtx.Dispose();
+                Normals.Dispose();
+                ZProjectedUv.Dispose();
+                RadialUv.Dispose();
+                Idx.Dispose();
+                VtxColor.Dispose();
+                GradTable.Dispose();
+            }
+        }
+
+        [BurstCompile]
+        public static void GenerateGrid(ref GridGenerationConfig config)
+        {
+            for (var i = 0; i < config.SegmentsU + 1; i++)
+            {
+                var phi = 2 * math.PI * config.Angle * ((float)i / config.SegmentsU);
                 var (x, y) = (math.cos(phi), math.sin(phi));
                 // The direction from the center to outer circle
-                var radialVDir = x * xAxis + y * yAxis;
+                var radialVDir = x * config.XAxis + y * config.YAxis;
 
-                var vertOffset = i * (segmentsV + 1);
+                var vertOffset = i * (config.SegmentsV + 1);
 
-                for (var j = 0; j < segmentsV + 1; j++)
+                for (var j = 0; j < config.SegmentsV + 1; j++)
                 {
                     var vertIdx = vertOffset + j;
-                    var outerRate = OuterRate(j);
-                    var extrusionRate = extrusion * (1.0f - j / (float)segmentsV);
-                    var vert = radialVDir * outerRate + zAxis * extrusionRate;
-                    vtx[vertIdx] = vert;
+                    var outerRate = OuterRate(j, config.InnerRadius, config.OuterRadius, config.SegmentsV);
+                    var extrusionRate = config.Extrusion * (1.0f - j / (float)config.SegmentsV);
+                    var vert = radialVDir * outerRate + config.ZAxis * extrusionRate;
+                    config.Vtx[vertIdx] = vert;
 
-                    var topProjectedUvVal = math.float2(math.dot(vert, xAxis), math.dot(vert, yAxis));
-                    topProjectedUvVal /= math.max(math.abs(innerRadius), math.abs(outerRadius));
+                    var topProjectedUvVal = math.float2(math.dot(vert, config.XAxis), math.dot(vert, config.YAxis));
+                    topProjectedUvVal /= math.max(math.abs(config.InnerRadius), math.abs(config.OuterRadius));
                     topProjectedUvVal = topProjectedUvVal / 2 + 0.5f;
-                    zProjectedUv[vertIdx] = topProjectedUvVal;
+                    config.ZProjectedUv[vertIdx] = topProjectedUvVal;
 
-                    var radialUvVal = math.float2(i / (float)segmentsU, j / (float)segmentsV);
-                    radialUv[vertIdx] = radialUvVal;
+                    var radialUvVal = math.float2(i / (float)config.SegmentsU, j / (float)config.SegmentsV);
+                    config.RadialUv[vertIdx] = radialUvVal;
 
-                    MapUvToColor(ref vtxColor, vertIdx, radialUvVal, topProjectedUvVal, vertexColorUVType,
-                        vertexColorMapType, ref gradTable);
+                    MapUvToColor(ref config.VtxColor, vertIdx, radialUvVal, topProjectedUvVal, config.VertexColorUVType,
+                        config.VertexColorMapType, ref config.GradTable);
                 }
 
                 // Compute normal
-                var binormal = math.normalizesafe(vtx[vertOffset + 1] - vtx[vertOffset]);
+                var binormal = math.normalizesafe(config.Vtx[vertOffset + 1] - config.Vtx[vertOffset]);
 
-                for (var j = 0; j < segmentsV + 1; j++)
+                for (var j = 0; j < config.SegmentsV + 1; j++)
                 {
                     var vertIdx = vertOffset + j;
-                    var outerRate = OuterRate(j);
+                    var outerRate = OuterRate(j, config.InnerRadius, config.OuterRadius, config.SegmentsV);
                     // Tangent is 90 degrees rotation of radialVDir
-                    var tangent = y * xAxis + -x * yAxis;
+                    var tangent = y * config.XAxis + -x * config.YAxis;
                     var normal = math.normalize(math.cross(tangent, binormal));
 
-                    if (flipTriangles)
+                    if (config.FlipTriangles)
                     {
                         normal *= -1;
                     }
@@ -136,48 +192,51 @@ namespace InstaMesh.Editor
                         normal *= -1;
                     }
 
-                    normals[vertIdx] = normal;
+                    config.Normals[vertIdx] = normal;
 
-                    if (doubleSided)
+                    if (config.DoubleSided)
                     {
-                        normals[vertIdx + sideVertCount] = -normal;
+                        config.Normals[vertIdx + config.SideVertCount] = -normal;
                     }
                 }
             }
 
-            if (doubleSided)
+            if (config.DoubleSided)
             {
-                NativeArray<float3>.Copy(vtx, 0, vtx, sideVertCount, sideVertCount);
-                NativeArray<float2>.Copy(zProjectedUv, 0, zProjectedUv, sideVertCount, sideVertCount);
-                NativeArray<float2>.Copy(radialUv, 0, radialUv, sideVertCount, sideVertCount);
-                NativeArray<Color32>.Copy(vtxColor, 0, vtxColor, sideVertCount, sideVertCount);
+                NativeArray<float3>.Copy(config.Vtx, 0, config.Vtx, config.SideVertCount, config.SideVertCount);
+                NativeArray<float2>.Copy(config.ZProjectedUv, 0, config.ZProjectedUv, config.SideVertCount,
+                    config.SideVertCount);
+                NativeArray<float2>.Copy(config.RadialUv, 0, config.RadialUv, config.SideVertCount,
+                    config.SideVertCount);
+                NativeArray<Color32>.Copy(config.VtxColor, 0, config.VtxColor, config.SideVertCount,
+                    config.SideVertCount);
             }
 
-            for (var i = 0; i < segmentsU; i++)
+            for (var i = 0; i < config.SegmentsU; i++)
             {
-                var sliceOriginIdx = i * (segmentsV + 1);
-                for (var j = 0; j < segmentsV; j++)
+                var sliceOriginIdx = i * (config.SegmentsV + 1);
+                for (var j = 0; j < config.SegmentsV; j++)
                 {
-                    var triIdx = (segmentsV * i + j) * 6;
+                    var triIdx = (config.SegmentsV * i + j) * 6;
                     var a = sliceOriginIdx + j;
                     var b = a + 1;
-                    var c = a + segmentsV + 1;
+                    var c = a + config.SegmentsV + 1;
                     var d = c + 1;
-                    PopulateQuad(ref idx, triIdx, a, b, c, d, !flipTriangles);
+                    PopulateQuad(ref config.Idx, triIdx, a, b, c, d, !config.FlipTriangles);
 
-                    if (!doubleSided) continue;
-                    triIdx += sideTriCount;
-                    a += sideVertCount;
-                    b += sideVertCount;
-                    c += sideVertCount;
-                    d += sideVertCount;
-                    PopulateQuad(ref idx, triIdx, a, b, c, d, flipTriangles);
+                    if (!config.DoubleSided) continue;
+                    triIdx += config.SideTriCount;
+                    a += config.SideVertCount;
+                    b += config.SideVertCount;
+                    c += config.SideVertCount;
+                    d += config.SideVertCount;
+                    PopulateQuad(ref config.Idx, triIdx, a, b, c, d, config.FlipTriangles);
                 }
             }
 
             return;
 
-            float OuterRate(int segment)
+            float OuterRate(int segment, float innerRadius, float outerRadius, int segmentsV)
             {
                 return (outerRadius - innerRadius) * (segment / (float)segmentsV) + innerRadius;
             }
